@@ -1,0 +1,11 @@
+apiVersion: skaffold/v4beta7
+kind: Config
+metadata:
+  name: atlantis
+profiles:
+  - name: target
+    manifests:
+      rawYaml:
+        - service.yaml
+deploy:
+  cloudrun: {}

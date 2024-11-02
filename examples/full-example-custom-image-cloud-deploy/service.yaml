@@ -1,0 +1,81 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: atlantis
+  namespace: <YOUR_PROJECT> # todo: Replace with your project
+  labels:
+    cloud.googleapis.com/location: europe-west1
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+    run.googleapis.com/description: "Atlantis is a tool for collaborating on Terraform through version control."
+    run.googleapis.com/ingress: internal-and-cloud-load-balancing
+    run.googleapis.com/binary-authorization: default
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1" # Having a minimum of one instance and always-on CPU helps to run longer plans.
+        autoscaling.knative.dev/maxScale: "1" # Using more than one instance may work but hasn't been tested.
+        run.googleapis.com/cpu-throttling: "false" # Using always-on CPU is recommended for Atlantis.
+        run.googleapis.com/startup-cpu-boost: "true"
+        run.googleapis.com/execution-environment: "gen2"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300 # Might need to be increased for complex projects
+      serviceAccountName: <YOUR_ATLANTIS_SERVICE_ACCOUNT> # todo: Replace with your Atlantis service account
+      containers:
+        - name: atlantis
+          image: <IMAGE> # Will be replaced before deployment via Cloud Deploy (Do not change this)
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - name: ATLANTIS_ATLANTIS_URL
+              value: <YOUR_ATLANTIS_URL> # todo: Replace with your Atlantis URL
+            - name: ATLANTIS_GH_USER
+              value: <YOUR_BOT_USERNAME> # todo: Replace with your bot username
+            - name: ATLANTIS_GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github_token_atlantis
+                  key: latest
+            - name: ATLANTIS_GH_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: github_webhook_secret_atlantis
+                  key: latest
+            - name: ATLANTIS_GH_ORG
+              value: <YOUR_GITHUB_ORGANIZATION> # todo: Replace with your GitHub organization
+            - name: ATLANTIS_ENABLE_DIFF_MARKDOWN_FORMAT
+              value: 'true'
+            - name: ATLANTIS_REPO_ALLOWLIST
+              value: github.com/<YOUR_ORGANIZATION>/* # todo: Replace with your repo allow list
+            - name: ATLANTIS_PORT
+              value: '8080'
+            - name: ATLANTIS_REPO_CONFIG
+              value: /app/repos.yaml
+            - name: ATLANTIS_HIDE_PREV_PLAN_COMMENTS
+              value: 'true'
+            - name: ATLANTIS_DATA_DIR
+              value: /app/atlantis
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          volumeMounts:
+            - name: atlantis_volume
+              mountPath: /app/atlantis
+          startupProbe:
+            timeoutSeconds: 240
+            periodSeconds: 240
+            failureThreshold: 1
+            tcpSocket:
+              port: 8080
+      volumes:
+        - name: atlantis_volume
+          csi:
+            driver: gcsfuse.run.googleapis.com
+            readOnly: false
+            volumeAttributes:
+              bucketName: <YOUR_ATLANTIS_STATE_BUCKET> # todo: Replace with your Atlantis state bucket
+              mountOptions: uid=100,gid=1000,file-mode=0744 # Atlantis requires more permissions than the default permissions assigned by Cloud Run.

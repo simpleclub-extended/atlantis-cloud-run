@@ -1,0 +1,7 @@
+# todo: Configure Atlantis to fit your needs
+repos:
+  - id: /.*/
+    apply_requirements: [approved, mergeable, undiverged]
+    delete_source_branch_on_merge: true
+    allow_custom_workflows: true
+    allowed_overrides: [workflow]

@@ -1,0 +1,34 @@
+timeout: 7200s
+options:
+  logging: CLOUD_LOGGING_ONLY
+serviceAccount: 'projects/-/serviceAccounts/<YOUR_ATLANTIS_BUILD_SERVICE_ACCOUNT>' # Use a custom service account to deploy the service account
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/atlantis'
+      - '.'
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/atlantis'
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Extract the image URL of the newly built image.
+        IMAGE=$(docker inspect --format='{{index .RepoDigests 0}}' 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/atlantis')
+
+        # Replace the image to use in the service.yaml file.
+        sed -i -e "s|<IMAGE>|$$IMAGE|g" service.yaml
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'deploy'
+      - 'releases'
+      - 'create'
+      - 'rel-$$DATE-$$TIME'
+      - '--delivery-pipeline=atlantis'
+      - '--region=europe-west1'
+images: ['europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/atlantis']
